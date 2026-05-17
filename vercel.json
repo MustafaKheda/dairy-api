@@ -5,6 +5,13 @@
       "maxDuration": 30
     }
   },
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/docs",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

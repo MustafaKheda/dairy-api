@@ -28,6 +28,8 @@ app.use(
 );
 
 app.get("/", (c) => c.redirect("/docs"));
+app.get("/api", (c) => c.redirect("/docs"));
+app.get("/api/", (c) => c.redirect("/docs"));
 
 app.get("/health", (c) => ok(c, { status: "ok" }));
 app.get("/openapi.json", (c) => c.json(openApiDocument));

@@ -185480,6 +185480,8 @@ app.use("*", cors({
   allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 }));
 app.get("/", (c) => c.redirect("/docs"));
+app.get("/api", (c) => c.redirect("/docs"));
+app.get("/api/", (c) => c.redirect("/docs"));
 app.get("/health", (c) => ok(c, { status: "ok" }));
 app.get("/openapi.json", (c) => c.json(openApiDocument));
 app.get("/docs", middleware({ url: "/openapi.json" }));
@@ -185501,18 +185503,8 @@ app.onError((error51, c) => {
 
 // src/vercel.ts
 var runtime = "nodejs";
-var GET = handle(app);
-var POST = handle(app);
-var PUT = handle(app);
-var PATCH = handle(app);
-var DELETE = handle(app);
-var OPTIONS = handle(app);
+var vercel_default = handle(app);
 export {
   runtime,
-  PUT,
-  POST,
-  PATCH,
-  OPTIONS,
-  GET,
-  DELETE
+  vercel_default as default
 };
