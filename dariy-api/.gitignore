@@ -1,7 +1,0 @@
-node_modules
-.env
-.vercel
-local.db
-local.db-*
-drizzle
-*.log
