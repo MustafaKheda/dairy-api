@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "start": "bun src/index.ts",
+    "build:vercel": "bun build src/vercel.ts --target=node --format=esm --outfile=api/index.js --external:@libsql/client --external:pdfkit",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
