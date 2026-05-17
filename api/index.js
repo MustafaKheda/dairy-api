@@ -155668,10 +155668,8 @@ end`);
   module.exports = PDFDocument;
 });
 
-// node_modules/hono/dist/adapter/vercel/handler.js
-var handle = (app) => (req) => {
-  return app.fetch(req);
-};
+// src/vercel.ts
+import { Readable } from "node:stream";
 
 // node_modules/hono/dist/compose.js
 var compose = (middleware, onError, onNotFound) => {
@@ -185503,8 +185501,42 @@ app.onError((error51, c) => {
 
 // src/vercel.ts
 var runtime = "nodejs";
-var vercel_default = handle(app);
+function requestUrl(req) {
+  const protocol = req.headers["x-forwarded-proto"] ?? "https";
+  const host = req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost";
+  return `${protocol}://${host}${req.url ?? "/"}`;
+}
+function requestBody(req) {
+  if (req.method === "GET" || req.method === "HEAD") {
+    return;
+  }
+  return Readable.toWeb(req);
+}
+async function handler(req, res) {
+  try {
+    const response = await app.fetch(new Request(requestUrl(req), {
+      method: req.method,
+      headers: req.headers,
+      body: requestBody(req),
+      duplex: "half"
+    }));
+    res.statusCode = response.status;
+    response.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
+    if (!response.body) {
+      res.end();
+      return;
+    }
+    Readable.fromWeb(response.body).pipe(res);
+  } catch (error51) {
+    console.error(error51);
+    res.statusCode = 500;
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ success: false, error: "Internal server error" }));
+  }
+}
 export {
   runtime,
-  vercel_default as default
+  handler as default
 };
