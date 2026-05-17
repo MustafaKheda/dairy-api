@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { requireAuth, requireRole } from "../middleware/auth";
-import { validateJson, validateParams, validateQuery } from "../middleware/validate";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+import { validateJson, validateParams, validateQuery } from "../middleware/validate.js";
 import {
   createCustomer,
   deactivateCustomer,
@@ -8,17 +8,17 @@ import {
   updateCustomer,
   updateCustomerPassword,
   updateOwnCustomerLocation,
-} from "../services/customers";
-import type { AppEnv } from "../types";
-import { ok } from "../utils/http";
-import { idParamSchema } from "../validators/common";
+} from "../services/customers.js";
+import type { AppEnv } from "../types.js";
+import { ok } from "../utils/http.js";
+import { idParamSchema } from "../validators/common.js";
 import {
   customerCreateSchema,
   customerLocationSchema,
   customerPasswordUpdateSchema,
   customerQuerySchema,
   customerUpdateSchema,
-} from "../validators/customers";
+} from "../validators/customers.js";
 
 export const customerRoutes = new Hono<AppEnv>();
 

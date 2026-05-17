@@ -1,11 +1,11 @@
 import { Hono } from "hono";
-import { requireAuth, requireRole } from "../middleware/auth";
-import { validateJson, validateParams, validateQuery } from "../middleware/validate";
-import { createEntry, deleteEntry, listEntries, updateEntry } from "../services/entries";
-import type { AppEnv } from "../types";
-import { ok } from "../utils/http";
-import { idParamSchema } from "../validators/common";
-import { entryCreateSchema, entryQuerySchema, entryUpdateSchema } from "../validators/entries";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+import { validateJson, validateParams, validateQuery } from "../middleware/validate.js";
+import { createEntry, deleteEntry, listEntries, updateEntry } from "../services/entries.js";
+import type { AppEnv } from "../types.js";
+import { ok } from "../utils/http.js";
+import { idParamSchema } from "../validators/common.js";
+import { entryCreateSchema, entryQuerySchema, entryUpdateSchema } from "../validators/entries.js";
 
 export const entryRoutes = new Hono<AppEnv>();
 

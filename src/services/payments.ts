@@ -1,8 +1,8 @@
 import { and, desc, eq, gte, lte, sql, type SQL } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { db } from "../db/client";
-import { customers, invoices, payments } from "../schema";
-import type { paymentCreateSchema, paymentQuerySchema } from "../validators/payments";
+import { db } from "../db/client.js";
+import { customers, invoices, payments } from "../schema/index.js";
+import type { paymentCreateSchema, paymentQuerySchema } from "../validators/payments.js";
 
 type PaymentQuery = typeof paymentQuerySchema._output & {
   customerId?: number;

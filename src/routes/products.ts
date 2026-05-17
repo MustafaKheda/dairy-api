@@ -1,11 +1,11 @@
 import { Hono } from "hono";
-import { requireAuth, requireRole } from "../middleware/auth";
-import { validateJson, validateParams, validateQuery } from "../middleware/validate";
-import { createProduct, deactivateProduct, listProducts, updateProduct } from "../services/products";
-import type { AppEnv } from "../types";
-import { ok } from "../utils/http";
-import { idParamSchema } from "../validators/common";
-import { productCreateSchema, productQuerySchema, productUpdateSchema } from "../validators/products";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+import { validateJson, validateParams, validateQuery } from "../middleware/validate.js";
+import { createProduct, deactivateProduct, listProducts, updateProduct } from "../services/products.js";
+import type { AppEnv } from "../types.js";
+import { ok } from "../utils/http.js";
+import { idParamSchema } from "../validators/common.js";
+import { productCreateSchema, productQuerySchema, productUpdateSchema } from "../validators/products.js";
 
 export const productRoutes = new Hono<AppEnv>();
 

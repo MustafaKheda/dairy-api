@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dateSchema, idSchema } from "./common";
+import { dateSchema, idSchema } from "./common.js";
 
 export const sessionSchema = z.enum(["MORNING", "EVENING"]);
 export const entryUnitSchema = z.enum(["LITER", "ML", "KG", "GRAM", "PIECE"]);

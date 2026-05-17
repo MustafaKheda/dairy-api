@@ -1,11 +1,11 @@
 import { Hono } from "hono";
-import { requireAuth, requireRole } from "../middleware/auth";
-import { validateJson, validateParams, validateQuery } from "../middleware/validate";
-import { generateInvoice, getInvoiceById, getInvoicePdf, listInvoices, previewInvoice, voidInvoice } from "../services/invoices";
-import type { AppEnv } from "../types";
-import { ok } from "../utils/http";
-import { idParamSchema } from "../validators/common";
-import { invoiceGenerateSchema, invoiceQuerySchema } from "../validators/invoices";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+import { validateJson, validateParams, validateQuery } from "../middleware/validate.js";
+import { generateInvoice, getInvoiceById, getInvoicePdf, listInvoices, previewInvoice, voidInvoice } from "../services/invoices.js";
+import type { AppEnv } from "../types.js";
+import { ok } from "../utils/http.js";
+import { idParamSchema } from "../validators/common.js";
+import { invoiceGenerateSchema, invoiceQuerySchema } from "../validators/invoices.js";
 
 export const invoiceRoutes = new Hono<AppEnv>();
 

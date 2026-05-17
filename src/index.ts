@@ -1,6 +1,6 @@
-import { app } from "./app";
-import { ensureDatabaseSchema } from "./db/ensure-schema";
-import { env } from "./lib/env";
+import { app } from "./app.js";
+import { ensureDatabaseSchema } from "./db/ensure-schema.js";
+import { env } from "./lib/env.js";
 
 await ensureDatabaseSchema();
 

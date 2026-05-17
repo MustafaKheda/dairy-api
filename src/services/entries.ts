@@ -1,8 +1,8 @@
 import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { db } from "../db/client";
-import { customers, dailyEntries, products } from "../schema";
-import type { entryCreateSchema, entryQuerySchema, entryUpdateSchema } from "../validators/entries";
+import { db } from "../db/client.js";
+import { customers, dailyEntries, products } from "../schema/index.js";
+import type { entryCreateSchema, entryQuerySchema, entryUpdateSchema } from "../validators/entries.js";
 
 type EntryQuery = typeof entryQuerySchema._output & {
   customerId?: number;

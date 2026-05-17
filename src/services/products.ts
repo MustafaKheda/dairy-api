@@ -1,8 +1,8 @@
 import { and, desc, eq, like, type SQL } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { db } from "../db/client";
-import { products } from "../schema";
-import type { productCreateSchema, productQuerySchema, productUpdateSchema } from "../validators/products";
+import { db } from "../db/client.js";
+import { products } from "../schema/index.js";
+import type { productCreateSchema, productQuerySchema, productUpdateSchema } from "../validators/products.js";
 
 export async function listProducts(query: typeof productQuerySchema._output) {
   const conditions: SQL[] = [];

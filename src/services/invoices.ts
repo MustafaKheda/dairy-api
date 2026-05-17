@@ -1,9 +1,9 @@
 import { and, desc, eq, gte, lte, ne, type SQL } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { db } from "../db/client";
-import { env } from "../lib/env";
-import { customers, dailyEntries, invoiceItems, invoices, payments, products } from "../schema";
-import type { AuthUser } from "../types";
+import { db } from "../db/client.js";
+import { env } from "../lib/env.js";
+import { customers, dailyEntries, invoiceItems, invoices, payments, products } from "../schema/index.js";
+import type { AuthUser } from "../types.js";
 
 type GenerateInvoiceInput = {
   customerId: number;

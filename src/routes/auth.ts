@@ -1,10 +1,10 @@
 import { Hono } from "hono";
-import { requireAuth } from "../middleware/auth";
-import { validateJson } from "../middleware/validate";
-import { changePassword, getCurrentUser, login } from "../services/auth";
-import type { AppEnv } from "../types";
-import { ok } from "../utils/http";
-import { changePasswordSchema, loginSchema } from "../validators/auth";
+import { requireAuth } from "../middleware/auth.js";
+import { validateJson } from "../middleware/validate.js";
+import { changePassword, getCurrentUser, login } from "../services/auth.js";
+import type { AppEnv } from "../types.js";
+import { ok } from "../utils/http.js";
+import { changePasswordSchema, loginSchema } from "../validators/auth.js";
 
 export const authRoutes = new Hono<AppEnv>();
 

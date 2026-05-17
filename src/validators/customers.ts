@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { optionalBooleanQuery, phoneSchema } from "./common";
+import { optionalBooleanQuery, phoneSchema } from "./common.js";
 
 export const customerLocationSchema = z
   .object({

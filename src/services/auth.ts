@@ -1,10 +1,10 @@
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { db } from "../db/client";
-import { issueToken, toAuthUser } from "../middleware/auth";
-import { customers, users, type User } from "../schema";
-import type { changePasswordSchema, loginSchema } from "../validators/auth";
+import { db } from "../db/client.js";
+import { issueToken, toAuthUser } from "../middleware/auth.js";
+import { customers, users, type User } from "../schema/index.js";
+import type { changePasswordSchema, loginSchema } from "../validators/auth.js";
 
 async function authResponse(user: User) {
   const authUser = toAuthUser(user);

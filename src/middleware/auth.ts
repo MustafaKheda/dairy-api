@@ -2,10 +2,10 @@ import { eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { createMiddleware } from "hono/factory";
 import { sign, verify } from "hono/jwt";
-import { db } from "../db/client";
-import { env } from "../lib/env";
-import { users, type User } from "../schema";
-import type { AppEnv, AuthUser, UserRole } from "../types";
+import { db } from "../db/client.js";
+import { env } from "../lib/env.js";
+import { users, type User } from "../schema/index.js";
+import type { AppEnv, AuthUser, UserRole } from "../types.js";
 
 const tokenTtlSeconds = 60 * 60 * 24 * 30;
 

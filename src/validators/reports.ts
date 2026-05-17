@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { dateSchema, idSchema, monthSchema } from "./common";
-import { today } from "../utils/date";
+import { dateSchema, idSchema, monthSchema } from "./common.js";
+import { today } from "../utils/date.js";
 
 export const dashboardQuerySchema = z.object({
   date: dateSchema.default(today),

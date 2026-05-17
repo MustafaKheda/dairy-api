@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { optionalBooleanQuery } from "./common";
+import { optionalBooleanQuery } from "./common.js";
 
 export const productUnitSchema = z.enum(["LITER", "ML", "KG", "GRAM", "PIECE"]);
 

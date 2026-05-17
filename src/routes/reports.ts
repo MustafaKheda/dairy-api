@@ -1,22 +1,22 @@
 import { Hono } from "hono";
-import { requireAuth, requireRole } from "../middleware/auth";
-import { validateQuery } from "../middleware/validate";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+import { validateQuery } from "../middleware/validate.js";
 import {
   getCustomerLedgerReport,
   getCustomerSummaryReport,
   getDailySalesReport,
   getDashboardReport,
   getMonthlySalesReport,
-} from "../services/reports";
-import type { AppEnv } from "../types";
-import { ok } from "../utils/http";
+} from "../services/reports.js";
+import type { AppEnv } from "../types.js";
+import { ok } from "../utils/http.js";
 import {
   customerLedgerQuerySchema,
   customerSummaryQuerySchema,
   dailySalesQuerySchema,
   dashboardQuerySchema,
   monthlySalesQuerySchema,
-} from "../validators/reports";
+} from "../validators/reports.js";
 
 export const reportRoutes = new Hono<AppEnv>();
 

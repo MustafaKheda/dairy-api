@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import type { z } from "zod";
-import type { AppEnv } from "../types";
+import type { AppEnv } from "../types.js";
 
 function validationError(error: z.ZodError) {
   return {

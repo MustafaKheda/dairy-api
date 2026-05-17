@@ -1,15 +1,15 @@
 import bcrypt from "bcryptjs";
 import { and, desc, eq, like, or, type SQL } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { db } from "../db/client";
-import { customers, users, type Customer } from "../schema";
+import { db } from "../db/client.js";
+import { customers, users, type Customer } from "../schema/index.js";
 import type {
   customerCreateSchema,
   customerLocationSchema,
   customerPasswordUpdateSchema,
   customerQuerySchema,
   customerUpdateSchema,
-} from "../validators/customers";
+} from "../validators/customers.js";
 
 async function upsertCustomerUser(customer: Customer, password?: string) {
   const [customerUser] = await db.select().from(users).where(eq(users.customerId, customer.id)).limit(1);

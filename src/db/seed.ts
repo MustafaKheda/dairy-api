@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
-import { db } from "./client";
-import { products, users } from "../schema";
+import { db } from "./client.js";
+import { products, users } from "../schema/index.js";
 
 const defaultProducts = [
   { name: "Milk", price: 60, unit: "LITER" as const },

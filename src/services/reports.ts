@@ -1,16 +1,16 @@
 import { and, desc, eq, gt, gte, lte, ne, sql, type SQL } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { db } from "../db/client";
-import { customers, dailyEntries, invoices, payments, products } from "../schema";
-import type { AuthUser } from "../types";
-import { monthRange, today } from "../utils/date";
+import { db } from "../db/client.js";
+import { customers, dailyEntries, invoices, payments, products } from "../schema/index.js";
+import type { AuthUser } from "../types.js";
+import { monthRange, today } from "../utils/date.js";
 import type {
   customerSummaryQuerySchema,
   dashboardQuerySchema,
   customerLedgerQuerySchema,
   dailySalesQuerySchema,
   monthlySalesQuerySchema,
-} from "../validators/reports";
+} from "../validators/reports.js";
 
 function money(value: unknown) {
   return Number(Number(value ?? 0).toFixed(2));
@@ -140,6 +140,8 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
   const month = monthRange(query.month);
   const customerFilter = query.customerId ? eq(dailyEntries.customerId, query.customerId) : undefined;
   const invoiceCustomerFilter = query.customerId ? eq(invoices.customerId, query.customerId) : undefined;
+  const entryRangeStart = query.date < month.startDate ? query.date : month.startDate;
+  const entryRangeEnd = query.date > month.endDate ? query.date : month.endDate;
 
   const [customerTotals] = await db
     .select({ totalCustomers: sql<number>`count(${customers.id})` })
@@ -150,26 +152,20 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
         : eq(customers.status, "ACTIVE"),
     );
 
-  const [dailyTotals] = await db
+  const [entryTotals] = await db
     .select({
-      totalAmount: sql<number>`coalesce(sum(${dailyEntries.quantity} * ${dailyEntries.price}), 0)`,
-      entryCount: sql<number>`count(${dailyEntries.id})`,
-      customerCount: sql<number>`count(distinct ${dailyEntries.customerId})`,
-    })
-    .from(dailyEntries)
-    .where(and(eq(dailyEntries.entryDate, query.date), ...(customerFilter ? [customerFilter] : [])));
-
-  const [monthlyTotals] = await db
-    .select({
-      totalAmount: sql<number>`coalesce(sum(${dailyEntries.quantity} * ${dailyEntries.price}), 0)`,
-      entryCount: sql<number>`count(${dailyEntries.id})`,
-      customerCount: sql<number>`count(distinct ${dailyEntries.customerId})`,
+      dailyAmount: sql<number>`coalesce(sum(case when ${dailyEntries.entryDate} = ${query.date} then ${dailyEntries.quantity} * ${dailyEntries.price} else 0 end), 0)`,
+      dailyEntryCount: sql<number>`coalesce(sum(case when ${dailyEntries.entryDate} = ${query.date} then 1 else 0 end), 0)`,
+      dailyCustomerCount: sql<number>`count(distinct case when ${dailyEntries.entryDate} = ${query.date} then ${dailyEntries.customerId} end)`,
+      monthlyAmount: sql<number>`coalesce(sum(case when ${dailyEntries.entryDate} >= ${month.startDate} and ${dailyEntries.entryDate} <= ${month.endDate} then ${dailyEntries.quantity} * ${dailyEntries.price} else 0 end), 0)`,
+      monthlyEntryCount: sql<number>`coalesce(sum(case when ${dailyEntries.entryDate} >= ${month.startDate} and ${dailyEntries.entryDate} <= ${month.endDate} then 1 else 0 end), 0)`,
+      monthlyCustomerCount: sql<number>`count(distinct case when ${dailyEntries.entryDate} >= ${month.startDate} and ${dailyEntries.entryDate} <= ${month.endDate} then ${dailyEntries.customerId} end)`,
     })
     .from(dailyEntries)
     .where(
       and(
-        gte(dailyEntries.entryDate, month.startDate),
-        lte(dailyEntries.entryDate, month.endDate),
+        gte(dailyEntries.entryDate, entryRangeStart),
+        lte(dailyEntries.entryDate, entryRangeEnd),
         ...(customerFilter ? [customerFilter] : []),
       ),
     );
@@ -177,20 +173,13 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
   const invoiceBaseConditions: SQL[] = [ne(invoices.status, "VOID")];
   if (invoiceCustomerFilter) invoiceBaseConditions.push(invoiceCustomerFilter);
 
-  const [invoiceTotals] = await db
-    .select({
-      invoiceTotal: sql<number>`coalesce(sum(${invoices.totalAmount}), 0)`,
-      paidAmount: sql<number>`coalesce(sum(${invoices.paidAmount}), 0)`,
-      pendingAmount: sql<number>`coalesce(sum(${invoices.pendingAmount}), 0)`,
-    })
-    .from(invoices)
-    .where(and(...invoiceBaseConditions));
-
   const statusRows = await db
     .select({
       status: invoices.status,
       count: sql<number>`count(${invoices.id})`,
       amount: sql<number>`coalesce(sum(${invoices.totalAmount}), 0)`,
+      paidAmount: sql<number>`coalesce(sum(${invoices.paidAmount}), 0)`,
+      pendingAmount: sql<number>`coalesce(sum(${invoices.pendingAmount}), 0)`,
     })
     .from(invoices)
     .where(invoiceCustomerFilter)
@@ -210,6 +199,21 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
     };
   }
 
+  const invoiceTotals = statusRows.reduce(
+    (total, row) => {
+      if (row.status === "VOID") {
+        return total;
+      }
+
+      return {
+        invoiceTotal: money(total.invoiceTotal + Number(row.amount)),
+        paidAmount: money(total.paidAmount + Number(row.paidAmount)),
+        pendingAmount: money(total.pendingAmount + Number(row.pendingAmount)),
+      };
+    },
+    { invoiceTotal: 0, paidAmount: 0, pendingAmount: 0 },
+  );
+
   const paymentConditions: SQL[] = [
     gte(payments.paymentDate, month.startDate),
     lte(payments.paymentDate, month.endDate),
@@ -223,31 +227,36 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
     .innerJoin(invoices, eq(invoices.id, payments.invoiceId))
     .where(and(...paymentConditions));
 
+  const ageBucket = sql<string>`
+    case
+      when max(0, cast(julianday(${query.date}) - julianday(${invoices.endDate}) as integer)) <= 30 then '0-30 Days'
+      when max(0, cast(julianday(${query.date}) - julianday(${invoices.endDate}) as integer)) <= 60 then '31-60 Days'
+      when max(0, cast(julianday(${query.date}) - julianday(${invoices.endDate}) as integer)) <= 90 then '61-90 Days'
+      else '>90 Days'
+    end
+  `;
   const agingRows = await db
     .select({
-      id: invoices.id,
-      endDate: invoices.endDate,
-      pendingAmount: invoices.pendingAmount,
+      label: ageBucket,
+      count: sql<number>`count(${invoices.id})`,
+      amount: sql<number>`coalesce(sum(${invoices.pendingAmount}), 0)`,
     })
     .from(invoices)
-    .where(and(...invoiceBaseConditions, gt(invoices.pendingAmount, 0)));
+    .where(and(...invoiceBaseConditions, gt(invoices.pendingAmount, 0)))
+    .groupBy(ageBucket);
 
   const agingBuckets = [
-    { label: "0-30 Days", min: 0, max: 30, count: 0, amount: 0 },
-    { label: "31-60 Days", min: 31, max: 60, count: 0, amount: 0 },
-    { label: "61-90 Days", min: 61, max: 90, count: 0, amount: 0 },
-    { label: ">90 Days", min: 91, max: Number.POSITIVE_INFINITY, count: 0, amount: 0 },
+    { label: "0-30 Days", count: 0, amount: 0 },
+    { label: "31-60 Days", count: 0, amount: 0 },
+    { label: "61-90 Days", count: 0, amount: 0 },
+    { label: ">90 Days", count: 0, amount: 0 },
   ];
-  const now = new Date(`${query.date}T00:00:00.000Z`);
 
   for (const row of agingRows) {
-    const ageDays = Math.max(
-      0,
-      Math.floor((now.getTime() - new Date(`${row.endDate}T00:00:00.000Z`).getTime()) / 86_400_000),
-    );
-    const bucket = agingBuckets.find((item) => ageDays >= item.min && ageDays <= item.max) ?? agingBuckets[0];
-    bucket.count += 1;
-    bucket.amount = money(bucket.amount + row.pendingAmount);
+    const bucket = agingBuckets.find((item) => item.label === row.label);
+    if (!bucket) continue;
+    bucket.count = Number(row.count);
+    bucket.amount = money(row.amount);
   }
 
   const recentEntries = await db
@@ -318,26 +327,26 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
     month: query.month,
     customerId: query.customerId ?? null,
     totalCustomers: Number(customerTotals?.totalCustomers ?? 0),
-    dailySales: money(dailyTotals?.totalAmount),
-    monthlyRevenue: money(monthlyTotals?.totalAmount),
-    pendingPayments: money(invoiceTotals?.pendingAmount),
-    invoiceTotal: money(invoiceTotals?.invoiceTotal),
-    paidAmount: money(invoiceTotals?.paidAmount),
+    dailySales: money(entryTotals?.dailyAmount),
+    monthlyRevenue: money(entryTotals?.monthlyAmount),
+    pendingPayments: money(invoiceTotals.pendingAmount),
+    invoiceTotal: money(invoiceTotals.invoiceTotal),
+    paidAmount: money(invoiceTotals.paidAmount),
     paymentReceived: money(paymentTotals?.receivedAmount),
     daily: {
-      totalAmount: money(dailyTotals?.totalAmount),
-      entryCount: Number(dailyTotals?.entryCount ?? 0),
-      customerCount: Number(dailyTotals?.customerCount ?? 0),
+      totalAmount: money(entryTotals?.dailyAmount),
+      entryCount: Number(entryTotals?.dailyEntryCount ?? 0),
+      customerCount: Number(entryTotals?.dailyCustomerCount ?? 0),
     },
     monthly: {
       startDate: month.startDate,
       endDate: month.endDate,
-      totalAmount: money(monthlyTotals?.totalAmount),
-      entryCount: Number(monthlyTotals?.entryCount ?? 0),
-      customerCount: Number(monthlyTotals?.customerCount ?? 0),
+      totalAmount: money(entryTotals?.monthlyAmount),
+      entryCount: Number(entryTotals?.monthlyEntryCount ?? 0),
+      customerCount: Number(entryTotals?.monthlyCustomerCount ?? 0),
     },
     invoiceStatusCounts: statusCounts,
-    paymentAging: agingBuckets.map(({ label, count, amount }) => ({ label, count, amount })),
+    paymentAging: agingBuckets,
     recentEntries: recentEntries.map((entry) => ({ ...entry, amount: money(entry.amount) })),
     recentInvoices,
     recentPayments,

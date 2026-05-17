@@ -3,17 +3,17 @@ import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "hono/logger";
 import { swaggerUI } from "@hono/swagger-ui";
-import { env } from "./lib/env";
-import { openApiDocument } from "./lib/openapi";
-import { authRoutes } from "./routes/auth";
-import { customerRoutes } from "./routes/customers";
-import { entryRoutes } from "./routes/entries";
-import { invoiceRoutes } from "./routes/invoices";
-import { paymentRoutes } from "./routes/payments";
-import { productRoutes } from "./routes/products";
-import { reportRoutes } from "./routes/reports";
-import type { AppEnv } from "./types";
-import { fail, ok } from "./utils/http";
+import { env } from "./lib/env.js";
+import { openApiDocument } from "./lib/openapi.js";
+import { authRoutes } from "./routes/auth.js";
+import { customerRoutes } from "./routes/customers.js";
+import { entryRoutes } from "./routes/entries.js";
+import { invoiceRoutes } from "./routes/invoices.js";
+import { paymentRoutes } from "./routes/payments.js";
+import { productRoutes } from "./routes/products.js";
+import { reportRoutes } from "./routes/reports.js";
+import type { AppEnv } from "./types.js";
+import { fail, ok } from "./utils/http.js";
 
 export const app = new Hono<AppEnv>();
 

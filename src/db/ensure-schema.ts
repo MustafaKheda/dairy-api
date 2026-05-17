@@ -1,4 +1,13 @@
-import { client } from "./client";
+import { client } from "./client.js";
+import { env } from "../lib/env.js";
+
+async function ensureLocalWalMode() {
+  if (!env.databaseUrl.startsWith("file:")) {
+    return;
+  }
+
+  await client.execute("PRAGMA journal_mode=WAL");
+}
 
 async function hasColumn(table: "daily_entries" | "invoice_items", column: string) {
   const result = await client.execute(`PRAGMA table_info(${table})`);
@@ -36,6 +45,7 @@ async function ensureInvoiceItemUnitColumn() {
 }
 
 export async function ensureDatabaseSchema() {
+  await ensureLocalWalMode();
   await ensureDailyEntryUnitColumn();
   await ensureInvoiceItemUnitColumn();
 }

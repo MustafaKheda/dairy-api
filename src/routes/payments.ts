@@ -1,10 +1,10 @@
 import { Hono } from "hono";
-import { requireAuth, requireRole } from "../middleware/auth";
-import { validateJson, validateQuery } from "../middleware/validate";
-import { createPayment, listPayments } from "../services/payments";
-import type { AppEnv } from "../types";
-import { ok } from "../utils/http";
-import { paymentCreateSchema, paymentQuerySchema } from "../validators/payments";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+import { validateJson, validateQuery } from "../middleware/validate.js";
+import { createPayment, listPayments } from "../services/payments.js";
+import type { AppEnv } from "../types.js";
+import { ok } from "../utils/http.js";
+import { paymentCreateSchema, paymentQuerySchema } from "../validators/payments.js";
 
 export const paymentRoutes = new Hono<AppEnv>();
 

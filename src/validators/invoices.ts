@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dateRangeSchema, dateSchema, idSchema } from "./common";
+import { dateRangeSchema, dateSchema, idSchema } from "./common.js";
 
 export const invoiceGenerateSchema = dateRangeSchema.extend({
   customerId: idSchema,

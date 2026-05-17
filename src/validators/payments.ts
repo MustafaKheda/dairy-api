@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { dateSchema, idSchema } from "./common";
-import { today } from "../utils/date";
+import { dateSchema, idSchema } from "./common.js";
+import { today } from "../utils/date.js";
 
 export const paymentMethodSchema = z.enum(["CASH", "UPI", "BANK_TRANSFER", "CARD", "OTHER"]);
 
