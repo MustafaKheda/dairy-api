@@ -16,17 +16,18 @@
     "db:seed": "bun src/db/seed.ts"
   },
   "dependencies": {
-    "@libsql/client": "latest",
     "@hono/swagger-ui": "latest",
+    "@libsql/client": "latest",
     "bcryptjs": "latest",
     "dotenv": "latest",
     "drizzle-orm": "latest",
     "hono": "latest",
-    "puppeteer": "latest",
+    "pdfkit": "^0.18.0",
     "zod": "latest"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/pdfkit": "^0.17.6",
     "drizzle-kit": "latest",
     "typescript": "latest"
   }

@@ -1,5 +1,6 @@
 import { and, desc, eq, gte, lte, ne, type SQL } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
+import PDFDocument from "pdfkit";
 import { db } from "../db/client.js";
 import { env } from "../lib/env.js";
 import { customers, dailyEntries, invoiceItems, invoices, payments, products } from "../schema/index.js";
@@ -291,108 +292,94 @@ export async function voidInvoice(invoiceId: number) {
   return getInvoiceById(invoiceId);
 }
 
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 function formatMoney(value: number) {
   return `Rs. ${Number(value).toFixed(2)}`;
 }
 
-export function renderInvoiceHtml(invoice: Awaited<ReturnType<typeof getInvoiceById>>) {
-  const rows = invoice.items
-    .map(
-      (item) => `
-        <tr>
-          <td>${escapeHtml(item.productName)}</td>
-          <td>${escapeHtml(item.unit)}</td>
-          <td>${item.quantity}</td>
-          <td>${formatMoney(item.price)}</td>
-          <td>${formatMoney(item.amount)}</td>
-        </tr>
-      `,
-    )
-    .join("");
-
-  return `
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <style>
-          body { font-family: Arial, sans-serif; color: #1f2937; margin: 40px; }
-          .header { display: flex; justify-content: space-between; border-bottom: 2px solid #111827; padding-bottom: 18px; }
-          h1 { margin: 0; font-size: 28px; }
-          h2 { margin: 24px 0 8px; font-size: 16px; }
-          p { margin: 4px 0; }
-          table { width: 100%; border-collapse: collapse; margin-top: 24px; }
-          th, td { border-bottom: 1px solid #e5e7eb; padding: 10px 8px; text-align: left; }
-          th { background: #f9fafb; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-          .totals { margin-left: auto; margin-top: 24px; width: 280px; }
-          .totals div { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
-          .status { display: inline-block; margin-top: 8px; padding: 4px 8px; background: #f3f4f6; border-radius: 4px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div>
-            <h1>Dairy Invoice</h1>
-            <p>${escapeHtml(invoice.invoiceNumber)}</p>
-            <span class="status">${escapeHtml(invoice.status)}</span>
-          </div>
-          <div>
-            <p><strong>Period</strong></p>
-            <p>${escapeHtml(invoice.startDate)} to ${escapeHtml(invoice.endDate)}</p>
-          </div>
-        </div>
-
-        <h2>Customer</h2>
-        <p><strong>${escapeHtml(invoice.customer.name)}</strong></p>
-        <p>${escapeHtml(invoice.customer.phone)}</p>
-        <p>${escapeHtml(invoice.customer.address)}</p>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Unit</th>
-              <th>Quantity</th>
-              <th>Price</th>
-              <th>Amount</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-
-        <div class="totals">
-          <div><span>Total</span><strong>${formatMoney(invoice.totalAmount)}</strong></div>
-          <div><span>Paid</span><strong>${formatMoney(invoice.paidAmount)}</strong></div>
-          <div><span>Pending</span><strong>${formatMoney(invoice.pendingAmount)}</strong></div>
-        </div>
-      </body>
-    </html>
-  `;
+function drawKeyValue(doc: PDFKit.PDFDocument, label: string, value: string, x: number, y: number) {
+  doc.font("Helvetica-Bold").fontSize(9).fillColor("#6b7280").text(label.toUpperCase(), x, y);
+  doc.font("Helvetica").fontSize(11).fillColor("#111827").text(value, x, y + 14, { width: 220 });
 }
 
-export async function generateInvoicePdf(invoice: Awaited<ReturnType<typeof getInvoiceById>>) {
-  const puppeteer = await import("puppeteer");
-  const browser = await puppeteer.default.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+function drawTableHeader(doc: PDFKit.PDFDocument, y: number) {
+  doc.rect(50, y, 495, 24).fill("#f3f4f6");
+  doc.fillColor("#374151").font("Helvetica-Bold").fontSize(9);
+  doc.text("Product", 60, y + 8, { width: 170 });
+  doc.text("Unit", 235, y + 8, { width: 70 });
+  doc.text("Qty", 305, y + 8, { width: 60, align: "right" });
+  doc.text("Price", 375, y + 8, { width: 70, align: "right" });
+  doc.text("Amount", 465, y + 8, { width: 70, align: "right" });
+}
 
-  try {
-    const page = await browser.newPage();
-    await page.setContent(renderInvoiceHtml(invoice), { waitUntil: "domcontentloaded" });
-    return await page.pdf({ format: "A4", printBackground: true });
-  } finally {
-    await browser.close();
+function addPageIfNeeded(doc: PDFKit.PDFDocument, y: number) {
+  if (y <= 720) {
+    return y;
   }
+
+  doc.addPage();
+  drawTableHeader(doc, 50);
+  return 82;
+}
+
+export function generateInvoicePdf(invoice: Awaited<ReturnType<typeof getInvoiceById>>) {
+  return new Promise<Buffer>((resolve, reject) => {
+    const doc = new PDFDocument({ size: "A4", margin: 50, bufferPages: true });
+    const chunks: Buffer[] = [];
+
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    doc.font("Helvetica-Bold").fontSize(24).fillColor("#111827").text("Dairy Invoice", 50, 48);
+    doc.font("Helvetica").fontSize(10).fillColor("#4b5563").text(invoice.invoiceNumber, 50, 78);
+    doc
+      .roundedRect(460, 50, 85, 24, 4)
+      .fill("#f3f4f6")
+      .fillColor("#111827")
+      .font("Helvetica-Bold")
+      .fontSize(10)
+      .text(invoice.status, 460, 57, { width: 85, align: "center" });
+
+    doc.moveTo(50, 112).lineTo(545, 112).lineWidth(1.5).strokeColor("#111827").stroke();
+
+    drawKeyValue(doc, "Period", `${invoice.startDate} to ${invoice.endDate}`, 50, 136);
+    drawKeyValue(doc, "Customer", invoice.customer.name, 300, 136);
+    drawKeyValue(doc, "Phone", invoice.customer.phone, 50, 186);
+    drawKeyValue(doc, "Address", invoice.customer.address ?? "", 300, 186);
+
+    let y = 252;
+    drawTableHeader(doc, y);
+    y += 34;
+
+    for (const item of invoice.items) {
+      y = addPageIfNeeded(doc, y);
+
+      doc.font("Helvetica").fontSize(10).fillColor("#111827");
+      doc.text(item.productName, 60, y, { width: 170 });
+      doc.text(item.unit, 235, y, { width: 70 });
+      doc.text(String(item.quantity), 305, y, { width: 60, align: "right" });
+      doc.text(formatMoney(item.price), 375, y, { width: 70, align: "right" });
+      doc.text(formatMoney(item.amount), 465, y, { width: 70, align: "right" });
+      y += Math.max(24, doc.heightOfString(item.productName, { width: 170 }) + 10);
+      doc.moveTo(50, y - 5).lineTo(545, y - 5).lineWidth(0.5).strokeColor("#e5e7eb").stroke();
+    }
+
+    y = addPageIfNeeded(doc, y + 20);
+    const totalsX = 335;
+    const totals = [
+      ["Total", invoice.totalAmount],
+      ["Paid", invoice.paidAmount],
+      ["Pending", invoice.pendingAmount],
+    ] as const;
+
+    for (const [label, value] of totals) {
+      doc.font("Helvetica").fontSize(11).fillColor("#374151").text(label, totalsX, y, { width: 90 });
+      doc.font("Helvetica-Bold").fillColor("#111827").text(formatMoney(value), 425, y, { width: 110, align: "right" });
+      y += 24;
+    }
+
+    doc.end();
+  });
 }
 
 export async function getInvoicePdf(invoiceId: number, authUser?: AuthUser) {
