@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, lte, ne, type SQL } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import PDFDocument from "pdfkit";
+import PDFDocument from "pdfkit/js/pdfkit.standalone.js";
 import { db } from "../db/client.js";
 import { env } from "../lib/env.js";
 import { customers, dailyEntries, invoiceItems, invoices, payments, products } from "../schema/index.js";

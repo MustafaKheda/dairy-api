@@ -49,7 +49,10 @@ invoiceRoutes.get("/:id/pdf", validateParams(idParamSchema), async (c) => {
   return new Response(invoicePdf.pdf as BodyInit, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${invoicePdf.filename}"`,
+      "Content-Disposition": `attachment; filename="${invoicePdf.filename}"`,
+      "Content-Length": String(invoicePdf.pdf.byteLength),
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 });

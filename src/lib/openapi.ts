@@ -688,10 +688,21 @@ export const openApiDocument = {
       get: {
         tags: ["Invoices"],
         summary: "Download invoice PDF",
+        operationId: "downloadInvoicePdf",
         parameters: [idParam],
         responses: {
           200: {
             description: "PDF file",
+            headers: {
+              "Content-Disposition": {
+                description: "Attachment filename for the generated invoice PDF",
+                schema: { type: "string", example: 'attachment; filename="INV-20260517-C1-ABC12345.pdf"' },
+              },
+              "Content-Length": {
+                description: "PDF size in bytes",
+                schema: { type: "integer", example: 2149 },
+              },
+            },
             content: {
               "application/pdf": {
                 schema: { type: "string", format: "binary" },
