@@ -185506,20 +185506,43 @@ function requestUrl(req) {
   const host = req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost";
   return `${protocol}://${host}${req.url ?? "/"}`;
 }
+function requestHeaders(req) {
+  const headers = new Headers;
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (Array.isArray(value)) {
+      for (const item of value)
+        headers.append(key, item);
+      continue;
+    }
+    if (value !== undefined) {
+      headers.set(key, String(value));
+    }
+  }
+  return headers;
+}
 function requestBody(req) {
   if (req.method === "GET" || req.method === "HEAD") {
     return;
   }
   return Readable.toWeb(req);
 }
+function isFetchRequest(req) {
+  return typeof Request !== "undefined" && req instanceof Request;
+}
 async function handler(req, res) {
+  if (isFetchRequest(req)) {
+    return app.fetch(req);
+  }
   try {
     const response = await app.fetch(new Request(requestUrl(req), {
       method: req.method,
-      headers: req.headers,
+      headers: requestHeaders(req),
       body: requestBody(req),
       duplex: "half"
     }));
+    if (!res) {
+      return response;
+    }
     res.statusCode = response.status;
     response.headers.forEach((value, key) => {
       res.setHeader(key, value);
@@ -185531,6 +185554,9 @@ async function handler(req, res) {
     Readable.fromWeb(response.body).pipe(res);
   } catch (error51) {
     console.error(error51);
+    if (!res) {
+      return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
+    }
     res.statusCode = 500;
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify({ success: false, error: "Internal server error" }));
