@@ -155668,8 +155668,10 @@ end`);
   module.exports = PDFDocument;
 });
 
-// src/vercel.ts
-import { Readable } from "node:stream";
+// node_modules/hono/dist/adapter/vercel/handler.js
+var handle = (app) => (req) => {
+  return app.fetch(req);
+};
 
 // node_modules/hono/dist/compose.js
 var compose = (middleware, onError, onNotFound) => {
@@ -185478,8 +185480,6 @@ app.use("*", cors({
   allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 }));
 app.get("/", (c) => c.redirect("/docs"));
-app.get("/api", (c) => c.redirect("/docs"));
-app.get("/api/", (c) => c.redirect("/docs"));
 app.get("/health", (c) => ok(c, { status: "ok" }));
 app.get("/openapi.json", (c) => c.json(openApiDocument));
 app.get("/docs", middleware({ url: "/openapi.json" }));
@@ -185501,68 +185501,18 @@ app.onError((error51, c) => {
 
 // src/vercel.ts
 var runtime = "nodejs";
-function requestUrl(req) {
-  const protocol = req.headers["x-forwarded-proto"] ?? "https";
-  const host = req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost";
-  return `${protocol}://${host}${req.url ?? "/"}`;
-}
-function requestHeaders(req) {
-  const headers = new Headers;
-  for (const [key, value] of Object.entries(req.headers)) {
-    if (Array.isArray(value)) {
-      for (const item of value)
-        headers.append(key, item);
-      continue;
-    }
-    if (value !== undefined) {
-      headers.set(key, String(value));
-    }
-  }
-  return headers;
-}
-function requestBody(req) {
-  if (req.method === "GET" || req.method === "HEAD") {
-    return;
-  }
-  return Readable.toWeb(req);
-}
-function isFetchRequest(req) {
-  return typeof Request !== "undefined" && req instanceof Request;
-}
-async function handler(req, res) {
-  if (isFetchRequest(req)) {
-    return app.fetch(req);
-  }
-  try {
-    const response = await app.fetch(new Request(requestUrl(req), {
-      method: req.method,
-      headers: requestHeaders(req),
-      body: requestBody(req),
-      duplex: "half"
-    }));
-    if (!res) {
-      return response;
-    }
-    res.statusCode = response.status;
-    response.headers.forEach((value, key) => {
-      res.setHeader(key, value);
-    });
-    if (!response.body) {
-      res.end();
-      return;
-    }
-    Readable.fromWeb(response.body).pipe(res);
-  } catch (error51) {
-    console.error(error51);
-    if (!res) {
-      return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
-    }
-    res.statusCode = 500;
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ success: false, error: "Internal server error" }));
-  }
-}
+var GET = handle(app);
+var POST = handle(app);
+var PUT = handle(app);
+var PATCH = handle(app);
+var DELETE = handle(app);
+var OPTIONS = handle(app);
 export {
   runtime,
-  handler as default
+  PUT,
+  POST,
+  PATCH,
+  OPTIONS,
+  GET,
+  DELETE
 };

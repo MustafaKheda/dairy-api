@@ -24,6 +24,7 @@
     "drizzle-orm": "latest",
     "hono": "latest",
     "pdfkit": "^0.18.0",
+    "vercel": "^54.1.0",
     "zod": "latest"
   },
   "devDependencies": {
