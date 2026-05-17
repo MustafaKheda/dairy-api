@@ -27,23 +27,7 @@ app.use(
   }),
 );
 
-app.get("/", (c) =>
-  ok(c, {
-    name: "Dairy API",
-    status: "ok",
-    routes: {
-      docs: "/docs",
-      openapi: "/openapi.json",
-      auth: "/auth",
-      customers: "/customers",
-      products: "/products",
-      entries: "/entries",
-      invoices: "/invoices",
-      payments: "/payments",
-      reports: "/reports",
-    },
-  }),
-);
+app.get("/", (c) => c.redirect("/docs"));
 
 app.get("/health", (c) => ok(c, { status: "ok" }));
 app.get("/openapi.json", (c) => c.json(openApiDocument));
