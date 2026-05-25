@@ -1,8 +1,8 @@
 import bcrypt from "bcryptjs";
-import { and, desc, eq, like, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, like, ne, or, sql, type SQL } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../db/client.js";
-import { customers, users, type Customer } from "../schema/index.js";
+import { customers, invoices, users, type Customer } from "../schema/index.js";
 import type {
   customerCreateSchema,
   customerLocationSchema,
@@ -50,11 +50,29 @@ export async function listCustomers(query: typeof customerQuerySchema._output) {
     conditions.push(or(like(customers.name, `%${query.search}%`), like(customers.phone, `%${query.search}%`))!);
   }
 
-  return db
+  const customerRows = await db
     .select()
     .from(customers)
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(customers.createdAt));
+
+  const pendingRows = await db
+    .select({
+      customerId: invoices.customerId,
+      pendingAmount: sql<number>`coalesce(sum(${invoices.pendingAmount}), 0)`,
+    })
+    .from(invoices)
+    .where(ne(invoices.status, "VOID"))
+    .groupBy(invoices.customerId);
+
+  const pendingByCustomer = new Map(
+    pendingRows.map((row) => [row.customerId, Number(Number(row.pendingAmount).toFixed(2))]),
+  );
+
+  return customerRows.map((customer) => ({
+    ...customer,
+    pendingAmount: pendingByCustomer.get(customer.id) ?? 0,
+  }));
 }
 
 export async function createCustomer(input: typeof customerCreateSchema._output) {

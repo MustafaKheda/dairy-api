@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte, ne, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, lte, ne, sql, type SQL } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import PDFDocument from "pdfkit/js/pdfkit.standalone.js";
 import { db } from "../db/client.js";
@@ -30,10 +30,16 @@ type InvoiceQuery = {
   endDate?: string;
 };
 
-function invoiceNumber(customerId: number) {
-  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 17);
-  const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
-  return `INV-${stamp}-C${customerId}-${suffix}`;
+function formatInvoiceNumber(sequence: number) {
+  return `INV-${String(sequence).padStart(4, "0")}`;
+}
+
+async function nextInvoiceNumber() {
+  const [row] = await db
+    .select({ next: sql<number>`coalesce(max(${invoices.id}), 0) + 1` })
+    .from(invoices);
+
+  return formatInvoiceNumber(Number(row?.next ?? 1));
 }
 
 export async function listInvoices(query: InvoiceQuery) {
@@ -252,7 +258,7 @@ export async function generateInvoice(input: GenerateInvoiceInput) {
     .insert(invoices)
     .values({
       customerId: input.customerId,
-      invoiceNumber: invoiceNumber(input.customerId),
+      invoiceNumber: await nextInvoiceNumber(),
       startDate: input.startDate,
       endDate: input.endDate,
       totalAmount: draft.totalAmount,

@@ -20,6 +20,10 @@ function quantity(value: unknown) {
   return Number(Number(value ?? 0).toFixed(3));
 }
 
+function invoiceOverlapConditions(startDate: string, endDate: string): SQL[] {
+  return [lte(invoices.startDate, endDate), gte(invoices.endDate, startDate)];
+}
+
 export async function getDailySalesReport(query: typeof dailySalesQuerySchema._output) {
   const rows = await db
     .select({
@@ -88,15 +92,23 @@ export async function getMonthlySalesReport(query: typeof monthlySalesQuerySchem
 }
 
 export async function getCustomerSummaryReport(query: typeof customerSummaryQuerySchema._output) {
-  const conditions: SQL[] = [];
+  const useDateRange = Boolean(query.startDate && query.endDate);
+  const customerConditions: SQL[] = [];
 
-  if (query.customerId) conditions.push(eq(customers.id, query.customerId));
+  if (query.customerId) customerConditions.push(eq(customers.id, query.customerId));
 
   const customerRows = await db
     .select()
     .from(customers)
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(customerConditions.length ? and(...customerConditions) : undefined)
     .orderBy(customers.name);
+
+  const deliveryConditions: SQL[] = [];
+  if (useDateRange) {
+    deliveryConditions.push(gte(dailyEntries.entryDate, query.startDate!));
+    deliveryConditions.push(lte(dailyEntries.entryDate, query.endDate!));
+  }
+  if (query.customerId) deliveryConditions.push(eq(dailyEntries.customerId, query.customerId));
 
   const deliveryRows = await db
     .select({
@@ -105,7 +117,12 @@ export async function getCustomerSummaryReport(query: typeof customerSummaryQuer
       deliveredQuantity: sql<number>`coalesce(sum(${dailyEntries.quantity}), 0)`,
     })
     .from(dailyEntries)
+    .where(deliveryConditions.length ? and(...deliveryConditions) : undefined)
     .groupBy(dailyEntries.customerId);
+
+  const invoiceConditions: SQL[] = [ne(invoices.status, "VOID")];
+  if (useDateRange) invoiceConditions.push(...invoiceOverlapConditions(query.startDate!, query.endDate!));
+  if (query.customerId) invoiceConditions.push(eq(invoices.customerId, query.customerId));
 
   const invoiceRows = await db
     .select({
@@ -115,7 +132,7 @@ export async function getCustomerSummaryReport(query: typeof customerSummaryQuer
       pendingAmount: sql<number>`coalesce(sum(${invoices.pendingAmount}), 0)`,
     })
     .from(invoices)
-    .where(ne(invoices.status, "VOID"))
+    .where(and(...invoiceConditions))
     .groupBy(invoices.customerId);
 
   const deliveries = new Map(deliveryRows.map((row) => [row.customerId, row]));
@@ -137,11 +154,16 @@ export async function getCustomerSummaryReport(query: typeof customerSummaryQuer
 }
 
 export async function getDashboardReport(query: typeof dashboardQuerySchema._output) {
+  const useDateRange = Boolean(query.startDate && query.endDate);
   const month = monthRange(query.month);
+  const rangeStart = useDateRange ? query.startDate! : month.startDate;
+  const rangeEnd = useDateRange ? query.endDate! : month.endDate;
+  const dailyDate = useDateRange ? query.endDate! : query.date;
+  const agingDate = useDateRange ? query.endDate! : query.date;
   const customerFilter = query.customerId ? eq(dailyEntries.customerId, query.customerId) : undefined;
   const invoiceCustomerFilter = query.customerId ? eq(invoices.customerId, query.customerId) : undefined;
-  const entryRangeStart = query.date < month.startDate ? query.date : month.startDate;
-  const entryRangeEnd = query.date > month.endDate ? query.date : month.endDate;
+  const entryRangeStart = useDateRange ? rangeStart : query.date < month.startDate ? query.date : month.startDate;
+  const entryRangeEnd = useDateRange ? rangeEnd : query.date > month.endDate ? query.date : month.endDate;
 
   const [customerTotals] = await db
     .select({ totalCustomers: sql<number>`count(${customers.id})` })
@@ -154,12 +176,12 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
 
   const [entryTotals] = await db
     .select({
-      dailyAmount: sql<number>`coalesce(sum(case when ${dailyEntries.entryDate} = ${query.date} then ${dailyEntries.quantity} * ${dailyEntries.price} else 0 end), 0)`,
-      dailyEntryCount: sql<number>`coalesce(sum(case when ${dailyEntries.entryDate} = ${query.date} then 1 else 0 end), 0)`,
-      dailyCustomerCount: sql<number>`count(distinct case when ${dailyEntries.entryDate} = ${query.date} then ${dailyEntries.customerId} end)`,
-      monthlyAmount: sql<number>`coalesce(sum(case when ${dailyEntries.entryDate} >= ${month.startDate} and ${dailyEntries.entryDate} <= ${month.endDate} then ${dailyEntries.quantity} * ${dailyEntries.price} else 0 end), 0)`,
-      monthlyEntryCount: sql<number>`coalesce(sum(case when ${dailyEntries.entryDate} >= ${month.startDate} and ${dailyEntries.entryDate} <= ${month.endDate} then 1 else 0 end), 0)`,
-      monthlyCustomerCount: sql<number>`count(distinct case when ${dailyEntries.entryDate} >= ${month.startDate} and ${dailyEntries.entryDate} <= ${month.endDate} then ${dailyEntries.customerId} end)`,
+      dailyAmount: sql<number>`coalesce(sum(case when ${dailyEntries.entryDate} = ${dailyDate} then ${dailyEntries.quantity} * ${dailyEntries.price} else 0 end), 0)`,
+      dailyEntryCount: sql<number>`coalesce(sum(case when ${dailyEntries.entryDate} = ${dailyDate} then 1 else 0 end), 0)`,
+      dailyCustomerCount: sql<number>`count(distinct case when ${dailyEntries.entryDate} = ${dailyDate} then ${dailyEntries.customerId} end)`,
+      monthlyAmount: sql<number>`coalesce(sum(case when ${dailyEntries.entryDate} >= ${rangeStart} and ${dailyEntries.entryDate} <= ${rangeEnd} then ${dailyEntries.quantity} * ${dailyEntries.price} else 0 end), 0)`,
+      monthlyEntryCount: sql<number>`coalesce(sum(case when ${dailyEntries.entryDate} >= ${rangeStart} and ${dailyEntries.entryDate} <= ${rangeEnd} then 1 else 0 end), 0)`,
+      monthlyCustomerCount: sql<number>`count(distinct case when ${dailyEntries.entryDate} >= ${rangeStart} and ${dailyEntries.entryDate} <= ${rangeEnd} then ${dailyEntries.customerId} end)`,
     })
     .from(dailyEntries)
     .where(
@@ -172,6 +194,7 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
 
   const invoiceBaseConditions: SQL[] = [ne(invoices.status, "VOID")];
   if (invoiceCustomerFilter) invoiceBaseConditions.push(invoiceCustomerFilter);
+  if (useDateRange) invoiceBaseConditions.push(...invoiceOverlapConditions(rangeStart, rangeEnd));
 
   const statusRows = await db
     .select({
@@ -182,7 +205,7 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
       pendingAmount: sql<number>`coalesce(sum(${invoices.pendingAmount}), 0)`,
     })
     .from(invoices)
-    .where(invoiceCustomerFilter)
+    .where(invoiceBaseConditions.length ? and(...invoiceBaseConditions) : undefined)
     .groupBy(invoices.status);
 
   const statusCounts = {
@@ -215,8 +238,8 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
   );
 
   const paymentConditions: SQL[] = [
-    gte(payments.paymentDate, month.startDate),
-    lte(payments.paymentDate, month.endDate),
+    gte(payments.paymentDate, rangeStart),
+    lte(payments.paymentDate, rangeEnd),
     ne(invoices.status, "VOID"),
   ];
   if (invoiceCustomerFilter) paymentConditions.push(invoiceCustomerFilter);
@@ -229,9 +252,9 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
 
   const ageBucket = sql<string>`
     case
-      when max(0, cast(julianday(${query.date}) - julianday(${invoices.endDate}) as integer)) <= 30 then '0-30 Days'
-      when max(0, cast(julianday(${query.date}) - julianday(${invoices.endDate}) as integer)) <= 60 then '31-60 Days'
-      when max(0, cast(julianday(${query.date}) - julianday(${invoices.endDate}) as integer)) <= 90 then '61-90 Days'
+      when max(0, cast(julianday(${agingDate}) - julianday(${invoices.endDate}) as integer)) <= 30 then '0-30 Days'
+      when max(0, cast(julianday(${agingDate}) - julianday(${invoices.endDate}) as integer)) <= 60 then '31-60 Days'
+      when max(0, cast(julianday(${agingDate}) - julianday(${invoices.endDate}) as integer)) <= 90 then '61-90 Days'
       else '>90 Days'
     end
   `;
@@ -259,6 +282,13 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
     bucket.amount = money(row.amount);
   }
 
+  const recentEntryConditions: SQL[] = [];
+  if (customerFilter) recentEntryConditions.push(customerFilter);
+  if (useDateRange) {
+    recentEntryConditions.push(gte(dailyEntries.entryDate, rangeStart));
+    recentEntryConditions.push(lte(dailyEntries.entryDate, rangeEnd));
+  }
+
   const recentEntries = await db
     .select({
       id: dailyEntries.id,
@@ -277,9 +307,13 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
     .from(dailyEntries)
     .innerJoin(customers, eq(customers.id, dailyEntries.customerId))
     .innerJoin(products, eq(products.id, dailyEntries.productId))
-    .where(customerFilter)
+    .where(recentEntryConditions.length ? and(...recentEntryConditions) : undefined)
     .orderBy(desc(dailyEntries.entryDate), desc(dailyEntries.id))
     .limit(5);
+
+  const recentInvoiceConditions: SQL[] = [];
+  if (invoiceCustomerFilter) recentInvoiceConditions.push(invoiceCustomerFilter);
+  if (useDateRange) recentInvoiceConditions.push(...invoiceOverlapConditions(rangeStart, rangeEnd));
 
   const recentInvoices = await db
     .select({
@@ -298,9 +332,16 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
     })
     .from(invoices)
     .innerJoin(customers, eq(customers.id, invoices.customerId))
-    .where(invoiceCustomerFilter)
+    .where(recentInvoiceConditions.length ? and(...recentInvoiceConditions) : undefined)
     .orderBy(desc(invoices.createdAt), desc(invoices.id))
     .limit(5);
+
+  const recentPaymentConditions: SQL[] = [];
+  if (invoiceCustomerFilter) recentPaymentConditions.push(invoiceCustomerFilter);
+  if (useDateRange) {
+    recentPaymentConditions.push(gte(payments.paymentDate, rangeStart));
+    recentPaymentConditions.push(lte(payments.paymentDate, rangeEnd));
+  }
 
   const recentPayments = await db
     .select({
@@ -318,13 +359,15 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
     .from(payments)
     .innerJoin(invoices, eq(invoices.id, payments.invoiceId))
     .innerJoin(customers, eq(customers.id, invoices.customerId))
-    .where(invoiceCustomerFilter)
+    .where(recentPaymentConditions.length ? and(...recentPaymentConditions) : undefined)
     .orderBy(desc(payments.paymentDate), desc(payments.id))
     .limit(5);
 
   return {
-    date: query.date,
+    date: dailyDate,
     month: query.month,
+    startDate: useDateRange ? rangeStart : null,
+    endDate: useDateRange ? rangeEnd : null,
     customerId: query.customerId ?? null,
     totalCustomers: Number(customerTotals?.totalCustomers ?? 0),
     dailySales: money(entryTotals?.dailyAmount),
@@ -339,8 +382,8 @@ export async function getDashboardReport(query: typeof dashboardQuerySchema._out
       customerCount: Number(entryTotals?.dailyCustomerCount ?? 0),
     },
     monthly: {
-      startDate: month.startDate,
-      endDate: month.endDate,
+      startDate: rangeStart,
+      endDate: rangeEnd,
       totalAmount: money(entryTotals?.monthlyAmount),
       entryCount: Number(entryTotals?.monthlyEntryCount ?? 0),
       customerCount: Number(entryTotals?.monthlyCustomerCount ?? 0),

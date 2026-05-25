@@ -239,7 +239,7 @@ export const openApiDocument = {
         type: "object",
         properties: {
           id: { type: "integer", example: 1 },
-          invoiceNumber: { type: "string", example: "INV-20260516100148-C1" },
+          invoiceNumber: { type: "string", example: "INV-0001" },
           startDate: { type: "string", format: "date", example: "2026-05-01" },
           endDate: { type: "string", format: "date", example: "2026-05-31" },
           totalAmount: { type: "number", example: 1200 },
@@ -696,7 +696,7 @@ export const openApiDocument = {
             headers: {
               "Content-Disposition": {
                 description: "Attachment filename for the generated invoice PDF",
-                schema: { type: "string", example: 'attachment; filename="INV-20260517-C1-ABC12345.pdf"' },
+                schema: { type: "string", example: 'attachment; filename="INV-0001.pdf"' },
               },
               "Content-Length": {
                 description: "PDF size in bytes",
@@ -754,6 +754,8 @@ export const openApiDocument = {
         parameters: [
           { name: "date", in: "query", schema: { type: "string", format: "date" } },
           { name: "month", in: "query", schema: { type: "string", example: "2026-05" } },
+          { name: "startDate", in: "query", schema: { type: "string", format: "date" } },
+          { name: "endDate", in: "query", schema: { type: "string", format: "date" } },
           { name: "customerId", in: "query", schema: { type: "integer" } },
         ],
         responses: {
@@ -788,7 +790,11 @@ export const openApiDocument = {
       get: {
         tags: ["Reports"],
         summary: "Customer summary report",
-        parameters: [{ name: "customerId", in: "query", schema: { type: "integer" } }],
+        parameters: [
+          { name: "customerId", in: "query", schema: { type: "integer" } },
+          { name: "startDate", in: "query", schema: { type: "string", format: "date" } },
+          { name: "endDate", in: "query", schema: { type: "string", format: "date" } },
+        ],
         responses: {
           200: successResponse({ type: "array", items: { type: "object" } }),
           ...authHeaderResponses,
