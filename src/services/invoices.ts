@@ -298,91 +298,265 @@ export async function voidInvoice(invoiceId: number) {
   return getInvoiceById(invoiceId);
 }
 
+const PDF = {
+  margin: 50,
+  contentRight: 545,
+  contentWidth: 495,
+  primary: "#14532d",
+  primaryLight: "#dcfce7",
+  text: "#111827",
+  textMuted: "#6b7280",
+  border: "#e5e7eb",
+  rowAlt: "#f9fafb",
+  footerY: 800,
+  tableBottom: 680,
+} as const;
+
+const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
+  PAID: { bg: "#dcfce7", text: "#166534", label: "Paid" },
+  UNPAID: { bg: "#fee2e2", text: "#991b1b", label: "Unpaid" },
+  PARTIAL: { bg: "#fef3c7", text: "#92400e", label: "Partial" },
+  VOID: { bg: "#f3f4f6", text: "#4b5563", label: "Void" },
+};
+
 function formatMoney(value: number) {
   return `Rs. ${Number(value).toFixed(2)}`;
 }
 
-function drawKeyValue(doc: PDFKit.PDFDocument, label: string, value: string, x: number, y: number) {
-  doc.font("Helvetica-Bold").fontSize(9).fillColor("#6b7280").text(label.toUpperCase(), x, y);
-  doc.font("Helvetica").fontSize(11).fillColor("#111827").text(value, x, y + 14, { width: 220 });
+function formatPdfDate(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  return date.toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function drawLabelValue(
+  doc: PDFKit.PDFDocument,
+  label: string,
+  value: string,
+  x: number,
+  y: number,
+  width = 200,
+) {
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(PDF.textMuted).text(label.toUpperCase(), x, y);
+  doc.font("Helvetica").fontSize(11).fillColor(PDF.text).text(value || "—", x, y + 12, { width });
+}
+
+function drawStatusBadge(doc: PDFKit.PDFDocument, status: string, x: number, y: number) {
+  const style = STATUS_STYLE[status] ?? { bg: "#f3f4f6", text: PDF.text, label: status };
+  const badgeW = 88;
+  const badgeH = 26;
+
+  doc.roundedRect(x, y, badgeW, badgeH, 6).fill(style.bg);
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(10)
+    .fillColor(style.text)
+    .text(style.label, x, y + 8, { width: badgeW, align: "center" });
+}
+
+function drawPageHeader(doc: PDFKit.PDFDocument, invoice: Awaited<ReturnType<typeof getInvoiceById>>) {
+  const headerH = 88;
+
+  doc.rect(0, 0, doc.page.width, headerH).fill(PDF.primary);
+
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(20)
+    .fillColor("#ffffff")
+    .text("Dairy Management", PDF.margin, 28);
+  doc
+    .font("Helvetica")
+    .fontSize(9)
+    .fillColor("#bbf7d0")
+    .text("Invoice & billing statement", PDF.margin, 54);
+
+  const invoiceBlockX = 360;
+  doc.font("Helvetica-Bold").fontSize(11).fillColor("#bbf7d0").text("INVOICE", invoiceBlockX, 28);
+  doc.font("Helvetica-Bold").fontSize(16).fillColor("#ffffff").text(invoice.invoiceNumber, invoiceBlockX, 44);
+  drawStatusBadge(doc, invoice.status, PDF.contentRight - 88, 30);
+
+  return headerH + 20;
+}
+
+function drawInfoPanels(doc: PDFKit.PDFDocument, invoice: Awaited<ReturnType<typeof getInvoiceById>>, y: number) {
+  const panelH = 118;
+  const gap = 16;
+  const panelW = (PDF.contentWidth - gap) / 2;
+  const leftX = PDF.margin;
+  const rightX = leftX + panelW + gap;
+  const innerW = panelW - 28;
+
+  for (const [x, title] of [
+    [leftX, "Bill To"],
+    [rightX, "Invoice Details"],
+  ] as const) {
+    doc.roundedRect(x, y, panelW, panelH, 8).lineWidth(1).strokeColor(PDF.border).stroke();
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(PDF.primary).text(title, x + 14, y + 14);
+  }
+
+  drawLabelValue(doc, "Customer", invoice.customer.name, leftX + 14, y + 34, innerW);
+  drawLabelValue(doc, "Phone", invoice.customer.phone, leftX + 14, y + 62, innerW);
+  if (invoice.customer.address) {
+    drawLabelValue(doc, "Address", invoice.customer.address, leftX + 14, y + 90, innerW);
+  }
+
+  drawLabelValue(
+    doc,
+    "Billing period",
+    `${formatPdfDate(invoice.startDate)} – ${formatPdfDate(invoice.endDate)}`,
+    rightX + 14,
+    y + 34,
+    innerW,
+  );
+  drawLabelValue(doc, "Issued on", formatPdfDate(invoice.createdAt), rightX + 14, y + 62, innerW);
+  drawLabelValue(doc, "Status", STATUS_STYLE[invoice.status]?.label ?? invoice.status, rightX + 14, y + 90, innerW);
+
+  return y + panelH + 24;
 }
 
 function drawTableHeader(doc: PDFKit.PDFDocument, y: number) {
-  doc.rect(50, y, 495, 24).fill("#f3f4f6");
-  doc.fillColor("#374151").font("Helvetica-Bold").fontSize(9);
-  doc.text("Product", 60, y + 8, { width: 170 });
-  doc.text("Unit", 235, y + 8, { width: 70 });
-  doc.text("Qty", 305, y + 8, { width: 60, align: "right" });
-  doc.text("Price", 375, y + 8, { width: 70, align: "right" });
-  doc.text("Amount", 465, y + 8, { width: 70, align: "right" });
+  const col = { product: 60, unit: 235, qty: 310, price: 385, amount: 470 };
+
+  doc.roundedRect(PDF.margin, y, PDF.contentWidth, 28, 6).fill(PDF.primaryLight);
+  doc.fillColor(PDF.primary).font("Helvetica-Bold").fontSize(9);
+  doc.text("PRODUCT", col.product, y + 10, { width: 165 });
+  doc.text("UNIT", col.unit, y + 10, { width: 65 });
+  doc.text("QTY", col.qty, y + 10, { width: 55, align: "right" });
+  doc.text("PRICE", col.price, y + 10, { width: 70, align: "right" });
+  doc.text("AMOUNT", col.amount, y + 10, { width: 65, align: "right" });
+
+  return { y: y + 36, col };
 }
 
-function addPageIfNeeded(doc: PDFKit.PDFDocument, y: number) {
-  if (y <= 720) {
+function drawTableRow(
+  doc: PDFKit.PDFDocument,
+  item: Awaited<ReturnType<typeof getInvoiceById>>["items"][number],
+  y: number,
+  col: ReturnType<typeof drawTableHeader>["col"],
+  rowIndex: number,
+) {
+  const rowH = Math.max(28, doc.heightOfString(item.productName, { width: 165 }) + 14);
+
+  if (rowIndex % 2 === 1) {
+    doc.rect(PDF.margin, y - 4, PDF.contentWidth, rowH).fill(PDF.rowAlt);
+  }
+
+  doc.font("Helvetica").fontSize(10).fillColor(PDF.text);
+  doc.text(item.productName, col.product, y, { width: 165 });
+  doc.fillColor(PDF.textMuted).text(item.unit, col.unit, y, { width: 65 });
+  doc.fillColor(PDF.text).text(String(item.quantity), col.qty, y, { width: 55, align: "right" });
+  doc.text(formatMoney(item.price), col.price, y, { width: 70, align: "right" });
+  doc.font("Helvetica-Bold").text(formatMoney(item.amount), col.amount, y, { width: 65, align: "right" });
+
+  return y + rowH;
+}
+
+function drawTotalsBox(
+  doc: PDFKit.PDFDocument,
+  invoice: Awaited<ReturnType<typeof getInvoiceById>>,
+  y: number,
+) {
+  const boxW = 240;
+  const boxX = PDF.contentRight - boxW;
+  const rows = [
+    { label: "Subtotal", value: invoice.totalAmount, bold: false },
+    { label: "Paid", value: invoice.paidAmount, bold: false },
+    { label: "Balance due", value: invoice.pendingAmount, bold: true },
+  ] as const;
+  const boxH = 24 + rows.length * 28 + 12;
+
+  doc.roundedRect(boxX, y, boxW, boxH, 8).lineWidth(1).strokeColor(PDF.border).stroke();
+
+  let rowY = y + 16;
+  for (const row of rows) {
+    const isDue = row.bold && invoice.pendingAmount > 0;
+    doc
+      .font(row.bold ? "Helvetica-Bold" : "Helvetica")
+      .fontSize(row.bold ? 11 : 10)
+      .fillColor(isDue ? "#991b1b" : PDF.textMuted)
+      .text(row.label, boxX + 16, rowY, { width: 90 });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(row.bold ? 12 : 10)
+      .fillColor(isDue ? "#991b1b" : PDF.text)
+      .text(formatMoney(row.value), boxX + 16, rowY, { width: boxW - 32, align: "right" });
+    rowY += 28;
+  }
+
+  return y + boxH + 16;
+}
+
+function drawPageFooters(doc: PDFKit.PDFDocument, invoiceNumber: string) {
+  const range = doc.bufferedPageRange();
+  const generated = formatPdfDate(new Date().toISOString());
+
+  for (let i = range.start; i < range.start + range.count; i++) {
+    doc.switchToPage(i);
+    doc
+      .moveTo(PDF.margin, PDF.footerY - 8)
+      .lineTo(PDF.contentRight, PDF.footerY - 8)
+      .lineWidth(0.5)
+      .strokeColor(PDF.border)
+      .stroke();
+    doc
+      .font("Helvetica")
+      .fontSize(8)
+      .fillColor(PDF.textMuted)
+      .text(`Generated ${generated}`, PDF.margin, PDF.footerY, { width: 280 });
+    doc.text(`${invoiceNumber}  ·  Page ${i - range.start + 1} of ${range.count}`, PDF.margin, PDF.footerY, {
+      width: PDF.contentWidth,
+      align: "right",
+    });
+  }
+}
+
+function drawContinuationBanner(doc: PDFKit.PDFDocument, invoiceNumber: string) {
+  doc.rect(0, 0, doc.page.width, 44).fill(PDF.primaryLight);
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(10)
+    .fillColor(PDF.primary)
+    .text(`${invoiceNumber} — continued`, PDF.margin, 16);
+  return 58;
+}
+
+function addPageIfNeeded(
+  doc: PDFKit.PDFDocument,
+  y: number,
+  invoiceNumber: string,
+) {
+  if (y <= PDF.tableBottom) {
     return y;
   }
 
   doc.addPage();
-  drawTableHeader(doc, 50);
-  return 82;
+  return drawTableHeader(doc, drawContinuationBanner(doc, invoiceNumber)).y;
 }
 
 export function generateInvoicePdf(invoice: Awaited<ReturnType<typeof getInvoiceById>>) {
   return new Promise<Buffer>((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 50, bufferPages: true });
+    const doc = new PDFDocument({ size: "A4", margin: PDF.margin, bufferPages: true });
     const chunks: Buffer[] = [];
 
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    doc.font("Helvetica-Bold").fontSize(24).fillColor("#111827").text("Dairy Invoice", 50, 48);
-    doc.font("Helvetica").fontSize(10).fillColor("#4b5563").text(invoice.invoiceNumber, 50, 78);
-    doc
-      .roundedRect(460, 50, 85, 24, 4)
-      .fill("#f3f4f6")
-      .fillColor("#111827")
-      .font("Helvetica-Bold")
-      .fontSize(10)
-      .text(invoice.status, 460, 57, { width: 85, align: "center" });
+    let y = drawPageHeader(doc, invoice);
+    y = drawInfoPanels(doc, invoice, y);
 
-    doc.moveTo(50, 112).lineTo(545, 112).lineWidth(1.5).strokeColor("#111827").stroke();
+    let { y: tableY, col } = drawTableHeader(doc, y);
 
-    drawKeyValue(doc, "Period", `${invoice.startDate} to ${invoice.endDate}`, 50, 136);
-    drawKeyValue(doc, "Customer", invoice.customer.name, 300, 136);
-    drawKeyValue(doc, "Phone", invoice.customer.phone, 50, 186);
-    drawKeyValue(doc, "Address", invoice.customer.address ?? "", 300, 186);
+    invoice.items.forEach((item, index) => {
+      tableY = addPageIfNeeded(doc, tableY, invoice.invoiceNumber);
+      tableY = drawTableRow(doc, item, tableY, col, index);
+    });
 
-    let y = 252;
-    drawTableHeader(doc, y);
-    y += 34;
-
-    for (const item of invoice.items) {
-      y = addPageIfNeeded(doc, y);
-
-      doc.font("Helvetica").fontSize(10).fillColor("#111827");
-      doc.text(item.productName, 60, y, { width: 170 });
-      doc.text(item.unit, 235, y, { width: 70 });
-      doc.text(String(item.quantity), 305, y, { width: 60, align: "right" });
-      doc.text(formatMoney(item.price), 375, y, { width: 70, align: "right" });
-      doc.text(formatMoney(item.amount), 465, y, { width: 70, align: "right" });
-      y += Math.max(24, doc.heightOfString(item.productName, { width: 170 }) + 10);
-      doc.moveTo(50, y - 5).lineTo(545, y - 5).lineWidth(0.5).strokeColor("#e5e7eb").stroke();
-    }
-
-    y = addPageIfNeeded(doc, y + 20);
-    const totalsX = 335;
-    const totals = [
-      ["Total", invoice.totalAmount],
-      ["Paid", invoice.paidAmount],
-      ["Pending", invoice.pendingAmount],
-    ] as const;
-
-    for (const [label, value] of totals) {
-      doc.font("Helvetica").fontSize(11).fillColor("#374151").text(label, totalsX, y, { width: 90 });
-      doc.font("Helvetica-Bold").fillColor("#111827").text(formatMoney(value), 425, y, { width: 110, align: "right" });
-      y += 24;
-    }
+    tableY = addPageIfNeeded(doc, tableY + 24, invoice.invoiceNumber);
+    drawTotalsBox(doc, invoice, tableY);
+    drawPageFooters(doc, invoice.invoiceNumber);
 
     doc.end();
   });
