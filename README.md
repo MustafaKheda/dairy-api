@@ -70,6 +70,12 @@ Seed admin and default products:
 bun run db:seed
 ```
 
+Clear all data and keep only the existing admin user (id and password unchanged):
+
+```sh
+bun run db:refresh
+```
+
 Open Drizzle Studio:
 
 ```sh
